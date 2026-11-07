@@ -1,0 +1,6 @@
+# Windows source must stay byte-for-byte. release.ps1 checks UTF-8 and string literals.
+* -text
+*.png binary
+*.ico binary
+*.ttf binary
+*.wav binary
