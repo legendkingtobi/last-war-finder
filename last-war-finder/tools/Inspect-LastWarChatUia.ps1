@@ -4,8 +4,12 @@
 
   Walks System.Windows.Automation under top-level windows whose process is
   LastWar.exe and whose title is exactly "Last War-Survival Game".
-  It does not type, click, change focus, toggle Narrator, read process memory,
-  inject code into the game, use the network, or read ValuePattern values.
+  It does not type, click, change focus, take the foreground, toggle Narrator,
+  read process memory, inject code into the game, use the network, or read
+  ValuePattern values. Simulated mouse, keyboard, and window messages are
+  excluded, as are coordinate and OCR clicks. Value and Invoke patterns are
+  only reported. They are not called, and pattern support is not approval to
+  send: a provider can implement those patterns with input simulation.
 
   Window metadata (handle, visibility, class, title length, title match) is
   stored before any UI Automation call. Titles other than the exact expected
@@ -29,7 +33,7 @@ $ErrorActionPreference = 'Stop'
 $ExpectedTitle = 'Last War-Survival Game'
 $ExpectedProcess = 'LastWar'
 $ExpectedExe = 'LastWar.exe'
-$ScriptVersion = 2
+$ScriptVersion = 3
 
 function Limit-Int([int]$Value, [int]$Min, [int]$Max) {
     if ($Value -lt $Min) { return $Min }
@@ -52,7 +56,11 @@ function New-Report([string]$Status, [bool]$TimedOut, [string]$Detail) {
         detail                   = $Detail
         stage                    = 'init'
         recipientVerified        = $false
-        disclaimer               = 'A nonempty Name is not recipient verification. ValuePattern values and message text were not read. Control presence does not identify the open chat.'
+        inputSimulationExcluded  = $true
+        patternsCalled           = $false
+        invokeApproved           = $false
+        valueSetApproved         = $false
+        disclaimer               = 'A nonempty Name is not recipient verification. Value and Invoke patterns are observations only and are not called. Pattern support is not a send method. ValuePattern values and message text were not read.'
         limits                   = [ordered]@{ maxNodes = $MaxNodes; maxDepth = $MaxDepth; timeoutSec = $TimeoutSec }
         timedOut                 = $TimedOut
         truncated                = $false
@@ -327,6 +335,7 @@ function Invoke-SelfTest {
     $report.exceptionMessage = $safe.text
     $report.stack = Convert-ToObjectArray $stack
     if ($emptyCopy.Count -ne 0 -or $oneCopy.Count -ne 1) { throw 'List copy failed.' }
+    if (-not $report.inputSimulationExcluded -or $report.patternsCalled -or $report.invokeApproved -or $report.valueSetApproved) { throw 'Input policy flags are wrong.' }
     Write-Report $report 0
 }
 
@@ -792,7 +801,7 @@ public static class LwfTopWindows {
     elseif (-not $sawEdit) { $report.status = 'TREE_PRESENT_NO_EDIT' }
     elseif (-not $sawInvokeButton) { $report.status = 'EDIT_PRESENT_NO_INVOKE_BUTTON' }
     else { $report.status = 'EDIT_PRESENT_NO_TITLE_ELEMENT' }
-    $report.detail = 'recipientVerified is false. titleExact is a boolean. textLikeNonemptyNameCount does not reveal text.'
+    $report.detail = 'recipientVerified is false. supportsValue and supportsInvoke are observations only and were not called. titleExact is a boolean. textLikeNonemptyNameCount does not reveal text.'
     $script:Stage = 'complete'
     Hide-InternalFields $windowItems
     Sync-Report
@@ -804,7 +813,7 @@ catch {
     Set-ErrorFields $report $_ $script:Stage
     try { Write-Report $report 1 }
     catch {
-        $fallback = '{"tool":"Inspect-LastWarChatUia","scriptVersion":2,"status":"WORKER_ERROR","stage":"serialize","recipientVerified":false,"exceptionType":"SerializeFailed"}'
+        $fallback = '{"tool":"Inspect-LastWarChatUia","scriptVersion":3,"status":"WORKER_ERROR","stage":"serialize","recipientVerified":false,"inputSimulationExcluded":true,"patternsCalled":false,"invokeApproved":false,"valueSetApproved":false,"exceptionType":"SerializeFailed"}'
         [Console]::Out.Write($fallback)
         exit 1
     }
